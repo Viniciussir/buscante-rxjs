@@ -1,6 +1,7 @@
+import { LivrosResultado } from './../../models/interfaces';
 import { Component, OnDestroy } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { Subscription, debounce, debounceTime, distinctUntilChanged, filter, map, switchMap, tap } from 'rxjs';
+import { EMPTY, Subscription, catchError, debounce, debounceTime, distinctUntilChanged, filter, map, of, switchMap, tap, throwError } from 'rxjs';
 import { Item, Livro } from 'src/app/models/interfaces';
 import { LivroVolumeInfo } from 'src/app/models/livroVolumeInfo';
 import { LivroService } from 'src/app/service/livro.service';
@@ -13,7 +14,11 @@ const PAUSA = 1000;
 })
 export class ListaLivrosComponent {
 
-  campoBusca = new FormControl()
+  campoBusca = new FormControl();
+
+  mensagemErro:string = '';
+
+  livrosResultado:LivrosResultado;
 
   constructor(
     private livroService : LivroService
@@ -21,13 +26,24 @@ export class ListaLivrosComponent {
 
   livrosEncontrados$ = this.campoBusca.valueChanges.pipe(
     debounceTime(PAUSA),
-    filter((valorDigitado) => valorDigitado.length >= 3),
-    tap(() => console.log('Fluxo inicial')),
-    distinctUntilChanged(),
-    switchMap((valorDigitado) => this.livroService.buscar(valorDigitado)),
-    tap((retornoApi) => console.log('Requisições ao servidor',retornoApi)),
-    map((items) => this.livrosResultadoParaLivros(items))
-  )
+    tap(() => {
+      console.log('Fluxo inicial de dados');
+    }),
+    filter(
+      (valorDigitado) => valorDigitado.length >= 3
+    ),
+    switchMap(
+      (valorDigitado) => this.livroService.buscar(valorDigitado)
+    ),
+    map(resultado => this.livrosResultado = resultado),
+    map(resultado => resultado.items ?? []),
+    map(items => this.livrosResultadoParaLivros(items)),
+    catchError(erro =>
+      { console.log(erro);
+        return throwError(() =>
+        new Error(this.mensagemErro = `Ops, ocorreu um erro! Recarregue a aplicação!`));
+      })
+  );
 
   livrosResultadoParaLivros(items: Item[]): LivroVolumeInfo[] {
     return items.map (item => {
